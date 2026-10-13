@@ -2,6 +2,7 @@ import math
 import torch
 import torch.nn as nn
 
+
 class IntQuantSTE(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, sc, upper_limit, lower_limit):
@@ -39,7 +40,7 @@ class IntQuantSTE(torch.autograd.Function):
         grad_sc = torch.where(
             x_scaled < lower_limit, lower_limit, grad_sc)
 
-        return grad_x, grad_x_hat * grad_scale * lsq_norm, None, None
+        return grad_x, grad_x_hat * grad_sc * lsq_norm, None, None
 
 
 @torch.compile(dynamic=False)
@@ -66,7 +67,6 @@ def _adkv_chunk_forward(kv_cache_chunk, current_zp, current_sc,
             zp_seq.append(current_zp.clone().detach())
             sc_seq.append(current_sc.clone().detach())
 
-
         residual = kv_cache_chunk[:, t] - current_zp         # [B, C]
         residual_hat, q = IntQuantSTE.apply(
             residual, current_sc, upper_limit, lower_limit)  # [B, C], [B, C]
@@ -84,6 +84,7 @@ def _adkv_chunk_forward(kv_cache_chunk, current_zp, current_sc,
         return torch.stack(outputs, dim=1), current_zp, current_sc, torch.stack(zp_seq, dim=1), torch.stack(sc_seq, dim=1)
     else:
         return torch.stack(outputs, dim=1), current_zp, current_sc, None, None
+
 
 class ADKVTrainModel(nn.Module):
     def __init__(self, num_hidden_states, truncation=32, bits=4, log_sc_min=-4.0, log_sc_max=4.0):
@@ -159,8 +160,8 @@ class ADKVTrainModel(nn.Module):
         num_truncations = T_padded // self.truncation
 
         # Expand 1 -> B
-        current_zp = self.init_zp.expand(B, -1).contiguous()        # [B, C]
-        current_sc = self.get_sc().expand(B, -1).contiguous() # [B, C]
+        current_zp = self.init_zp.expand(B, -1).contiguous()  # [B, C]
+        current_sc = self.get_sc().expand(B, -1).contiguous()  # [B, C]
 
         chunk_inputs = kv_cache.split(CHUNK, dim=1)
         chunk_outputs = []
@@ -188,6 +189,7 @@ class ADKVTrainModel(nn.Module):
         if output_states:
             zp_outputs = torch.cat(chunk_zp_seq, dim=1)
             sc_outputs = torch.cat(chunk_sc_seq, dim=1)
-            return outputs[:, :T], zp_outputs[:, :T], sc_outputs[:, :T] # [B, T, C]
+            # [B, T, C]
+            return outputs[:, :T], zp_outputs[:, :T], sc_outputs[:, :T]
         else:
-            return outputs[:, :T] # [B, T, C]
+            return outputs[:, :T]  # [B, T, C]

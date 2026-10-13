@@ -279,7 +279,7 @@ def load_layer_data(
     model_path: str | None,
     dataset_path: str | None,
     n_samples: int = 256,
-    clip_len:int = 100,
+    clip_len: int = 100,
     max_length: int = 516,
     batch_size: int = 16,
 ):
@@ -407,7 +407,6 @@ def main():
                             f"WTS mean={shuf_k['WTS'].mean():.4f} std={shuf_k['WTS'].std():.4f}")
                 logger.info(f"V WTZP mean={shuf_v['WTZP'].mean():.4f} std={shuf_v['WTZP'].std():.4f} | "
                             f"WTS mean={shuf_v['WTS'].mean():.4f} std={shuf_v['WTS'].std():.4f}")
-
 
             del calib_dataset, k_np, v_np
 

@@ -12,13 +12,14 @@ import matplotlib.colors as mcolors
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 def load_layer_data(
     calib_dir: str,
     layer: int,
     model_path: str | None,
     dataset_path: str | None,
     n_samples: int = 12,
-    clip_len:int = 16000,
+    clip_len: int = 16000,
     max_length: int = 4096,
     batch_size: int = 2,
 ):
@@ -73,8 +74,9 @@ def trace_fig(key: np.ndarray):
         origin="upper",
     )
 
-    ax.set_xlabel("Token Index", fontsize=12)
-    ax.set_ylabel("Channel Index", fontsize=12)
+    ax.set_xlabel("Token Index", fontsize=16)
+    ax.set_ylabel("Channel Index", fontsize=16)
+    ax.tick_params(axis="both", labelsize=12)
 
     fig.tight_layout()
     return fig
@@ -97,6 +99,7 @@ def parse_args():
     p.add_argument("--calib_dir", type=str, default="calib")
     p.add_argument("--out_dir", type=str, default="figures")
     return p.parse_args()
+
 
 def main():
     args = parse_args()
