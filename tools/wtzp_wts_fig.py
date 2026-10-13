@@ -3,6 +3,7 @@ import logging
 from pathlib import Path
 import sys
 import subprocess
+from tqdm import tqdm
 import torch
 import numpy as np
 import matplotlib as mpl
@@ -100,7 +101,7 @@ def ema_trackability_seq(
     A = len(alpha_grid)
     P_matrix = np.full((A, C), np.nan)
 
-    for i, alpha in enumerate(alpha_grid):
+    for i, alpha in enumerate(tqdm(alpha_grid)):
         dc = s[:, 0, :].copy()  # [N, C]
         residuals = np.empty((N, W - 1, C), dtype=np.float64)
         for w in range(1, W):
@@ -278,7 +279,8 @@ def load_layer_data(
     model_path: str | None,
     dataset_path: str | None,
     n_samples: int = 256,
-    max_length: int = 128,
+    clip_len:int = 100,
+    max_length: int = 516,
     batch_size: int = 16,
 ):
     pt_file = Path(calib_dir) / f"calib_llama_{layer}.pt"
@@ -292,10 +294,12 @@ def load_layer_data(
     cmd = [
         sys.executable, "-m", "adkv.calib_collector",
         f"--layers={layer}",
+        f"--shuffle",
+        f"--clip_len={clip_len}",
         f"--n_samples={n_samples}",
         f"--max_length={max_length}",
         f"--batch_size={batch_size}",
-        f"--output={pt_file}",
+        f"--output={Path(calib_dir) / "calib_llama.pt"}",
     ]
     if model_path:
         cmd.append(f"--model={model_path}")
@@ -312,14 +316,14 @@ def parse_args():
 
     p.add_argument("--layers", type=int, nargs="+", required=True)
 
-    p.add_argument("--calib_dir", type=str, default="calib")
     p.add_argument("--model", type=str)
     p.add_argument("--calib_data", type=str)
     p.add_argument("--n_samples", type=int, default=256)
-    p.add_argument("--max_length", type=int, default=128)
+    p.add_argument("--clip_len", type=int, default=100)
+    p.add_argument("--max_length", type=int, default=516)
     p.add_argument("--batch_size", type=int, default=16)
 
-    p.add_argument("--window", type=int, default=16,
+    p.add_argument("--window", type=int, default=8,
                    help="Sliding window width W (tokens)")
     p.add_argument("--stride", type=int,
                    help="Sliding window stride S; defaults to W//2 if not set")
@@ -330,6 +334,7 @@ def parse_args():
     p.add_argument("--shuffle_seed", type=int, default=42,
                    help="RNG seed for the shuffled-token control group; set to -1 to disable the control group entirely")
 
+    p.add_argument("--calib_dir", type=str, default="calib")
     p.add_argument("--out_dir", type=str, default="figures")
     return p.parse_args()
 
@@ -363,6 +368,7 @@ def main():
                 model_path=args.model,
                 dataset_path=args.calib_data,
                 n_samples=args.n_samples,
+                clip_len=args.clip_len,
                 max_length=args.max_length,
                 batch_size=args.batch_size
             )
@@ -396,6 +402,12 @@ def main():
                 shuf_v = window_trackability(
                     v_shuf, args.window, stride, alpha_grid)
                 tp_shuf[L] = {"k": shuf_k, "v": shuf_v}
+
+                logger.info(f"K WTZP mean={shuf_k['WTZP'].mean():.4f} std={shuf_k['WTZP'].std():.4f} | "
+                            f"WTS mean={shuf_k['WTS'].mean():.4f} std={shuf_k['WTS'].std():.4f}")
+                logger.info(f"V WTZP mean={shuf_v['WTZP'].mean():.4f} std={shuf_v['WTZP'].std():.4f} | "
+                            f"WTS mean={shuf_v['WTS'].mean():.4f} std={shuf_v['WTS'].std():.4f}")
+
 
             del calib_dataset, k_np, v_np
 

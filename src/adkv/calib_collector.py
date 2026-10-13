@@ -132,8 +132,8 @@ def run_chunk(args, model, tokenizer, calib_data, device, chunk):
                 batch_idx = start // args.batch_size + 1
                 first = chunk[0]
                 logger.info(f"batch {batch_idx}/{n_batches}"
-                            f"q shape: {all_layers[first]['q'][0].shape}"
-                            f"kv shape: {all_layers[first]['k'][0].shape}")
+                            f" q shape: {all_layers[first]['q'][0].shape}"
+                            f" kv shape: {all_layers[first]['k'][0].shape}")
     finally:
         for h in handles:
             h.remove()
@@ -150,9 +150,9 @@ def run_chunk(args, model, tokenizer, calib_data, device, chunk):
         out_path = f"{base}_{i}{ext}"
         logger.info(f"Layer {i}:")
         logger.info(
-            f"calib_k: {calib_k.shape}  (min={calib_k.min():.4f}, max={calib_k.max():.4f}, mean={calib_k.mean():.4f}, std={calib_k.std():.4f})")
+            f"calib_k: {calib_k.shape} (min={calib_k.min():.4f}, max={calib_k.max():.4f}, mean={calib_k.mean():.4f}, std={calib_k.std():.4f})")
         logger.info(
-            f"calib_v: {calib_v.shape}  (min={calib_v.min():.4f}, max={calib_v.max():.4f}, mean={calib_v.mean():.4f}, std={calib_v.std():.4f})")
+            f"calib_v: {calib_v.shape} (min={calib_v.min():.4f}, max={calib_v.max():.4f}, mean={calib_v.mean():.4f}, std={calib_v.std():.4f})")
         torch.save({"calib_q": calib_q, "calib_k": calib_k,
                    "calib_v": calib_v}, out_path)
         logger.info(f"Saved -> {out_path}")
@@ -195,7 +195,7 @@ def load_model(args, device):
 
     model = AutoModelForCausalLM.from_pretrained(
         args.model,
-        torch_dtype=torch.float16,
+        dtype=torch.float16,
         attn_implementation="eager"
     ).to(device).eval()
 

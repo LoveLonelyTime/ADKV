@@ -1,6 +1,8 @@
 import argparse
 from pathlib import Path
 import logging
+import sys
+import subprocess
 import torch
 import numpy as np
 import matplotlib as mpl
@@ -10,15 +12,40 @@ import matplotlib.colors as mcolors
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+def load_layer_data(
+    calib_dir: str,
+    layer: int,
+    model_path: str | None,
+    dataset_path: str | None,
+    n_samples: int = 12,
+    clip_len:int = 16000,
+    max_length: int = 4096,
+    batch_size: int = 2,
+):
+    pt_file = Path(calib_dir) / f"calib_llama_{layer}.pt"
 
-def parse_args():
-    p = argparse.ArgumentParser(
-        description="Trace of KV cache."
-    )
+    if pt_file.exists():
+        logger.info(f"[layer {layer}] Loading {pt_file}")
+        return torch.load(pt_file, map_location="cpu")
 
-    p.add_argument("--calib_dir", type=str, default="calib")
-    p.add_argument("--out_dir", type=str, default="figures")
-    return p.parse_args()
+    logger.info(
+        f"[layer {layer}] Calibrating (this may take a few minutes)...")
+    cmd = [
+        sys.executable, "-m", "adkv.calib_collector",
+        f"--layers={layer}",
+        f"--shuffle",
+        f"--clip_len={clip_len}",
+        f"--n_samples={n_samples}",
+        f"--max_length={max_length}",
+        f"--batch_size={batch_size}",
+        f"--output={Path(calib_dir) / "calib_llama.pt"}",
+    ]
+    if model_path:
+        cmd.append(f"--model={model_path}")
+    if dataset_path:
+        cmd.append(f"--calib_data={dataset_path}")
+    subprocess.run(cmd, check=True)
+    return torch.load(pt_file, map_location="cpu")
 
 
 def trace_fig(key: np.ndarray):
@@ -33,7 +60,7 @@ def trace_fig(key: np.ndarray):
 
     data = key.T  # (dim, token)
 
-    vmin = np.percentile(data, 10)  # < 90% -> White
+    vmin = np.percentile(data, 90)  # < 90% -> White
     vmax = np.percentile(data, 99.5)  # > 99.5 -> Red (Outliers)
 
     ax.imshow(
@@ -53,23 +80,48 @@ def trace_fig(key: np.ndarray):
     return fig
 
 
+def parse_args():
+    p = argparse.ArgumentParser(
+        description="Trace of KV cache."
+    )
+
+    p.add_argument("--layer", type=int, default=11)
+
+    p.add_argument("--model", type=str)
+    p.add_argument("--calib_data", type=str)
+    p.add_argument("--n_samples", type=int, default=12)
+    p.add_argument("--clip_len", type=int, default=16000)
+    p.add_argument("--max_length", type=int, default=4096)
+    p.add_argument("--batch_size", type=int, default=2)
+
+    p.add_argument("--calib_dir", type=str, default="calib")
+    p.add_argument("--out_dir", type=str, default="figures")
+    return p.parse_args()
+
 def main():
     args = parse_args()
+
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    Path(args.calib_dir).mkdir(parents=True, exist_ok=True)
 
-    # Load Llama-2 7B Layer #12
-    if not (Path(args.calib_dir) / "calib_llama_11.pt").exists():
-        raise FileNotFoundError(
-            "calib_llama_11.pt not found, please collect calibration dataset first")
+    calib_dataset = load_layer_data(
+        calib_dir=args.calib_dir,
+        layer=args.layer,
+        model_path=args.model,
+        dataset_path=args.calib_data,
+        n_samples=args.n_samples,
+        clip_len=args.clip_len,
+        max_length=args.max_length,
+        batch_size=args.batch_size
+    )
 
-    calib_dataset = torch.load(Path(args.calib_dir) / "calib_llama_11.pt")
     key = calib_dataset["calib_k"].numpy().astype(np.float32)
-    logger.log(f"key shape: {key.shape}")
+    logger.info(f"key shape: {key.shape}")
 
     key_abs = np.abs(key[0, :, :])  # (batch, token, dim)
 
-    logger.info("[Figure] WTZP / WTS Figure (Figure 2 Left)...")
+    logger.info("[Figure] Trace Figure (Figure 2 Middle)...")
     fig = trace_fig(key_abs)
 
     fig.savefig(out_dir / "trace_fig.pdf")
