@@ -86,7 +86,7 @@ def comparison_adkv_fig(
 
 def parse_args():
     p = argparse.ArgumentParser(
-        description="Trace of KV cache."
+        description="Comparison ADKV vs RTN."
     )
 
     p.add_argument("--layer", type=int, default=11)
