@@ -48,15 +48,23 @@ def ADKV_memory(batch, hidden_dim, seq_len, bits=4):
     ckpt_num = 1
 
     key_quant_bytes = batch * hidden_dim * seq_len * bits / 8
-    key_zero_point_bytes = batch * ckpt_num * hidden_dim * 2  # FP16
-    key_scaling_factor_bytes = batch * ckpt_num * hidden_dim * 2
+    if ckpt_num == 1:
+        key_zero_point_bytes = hidden_dim * 2  # FP16
+        key_scaling_factor_bytes = hidden_dim * 2
+    else: # Checkpoint mode
+        key_zero_point_bytes = ckpt_num * batch * hidden_dim * 2
+        key_scaling_factor_bytes = ckpt_num * batch * hidden_dim * 2
     key_alpha_bytes = hidden_dim * 2
     key_beta_bytes = hidden_dim * 2
     key_target_bytes = hidden_dim * 2
 
     val_quant_bytes = batch * hidden_dim * seq_len * bits / 8
-    val_zero_point_bytes = batch * ckpt_num * hidden_dim * 2
-    val_scaling_factor_bytes = batch * ckpt_num * hidden_dim * 2
+    if ckpt_num == 1:
+        val_zero_point_bytes = hidden_dim * 2
+        val_scaling_factor_bytes = hidden_dim * 2
+    else: # Checkpoint mode
+        val_zero_point_bytes = ckpt_num * batch * hidden_dim * 2
+        val_scaling_factor_bytes = ckpt_num * batch * hidden_dim * 2
     val_alpha_bytes = hidden_dim * 2
     val_beta_bytes = hidden_dim * 2
     val_target_bytes = hidden_dim * 2
