@@ -239,7 +239,7 @@ def parse_args():
     parser.add_argument('--model', type=str,
                         default='meta-llama/Llama-2-7b-hf')
 
-    parser.add_argument('--calib_data', type=str,
+    parser.add_argument('--calib_data', type=str, default=None,
                         help="Path to calibration dataset from local disk.")
     parser.add_argument('--shuffle', action='store_true')
     parser.add_argument('--seed', type=int, default=42)

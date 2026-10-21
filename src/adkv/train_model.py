@@ -184,6 +184,21 @@ class ADKVTrainModel(nn.Module):
             current_zp = current_zp.detach()
             current_sc = current_sc.detach()
 
+        # Tail chunks
+        tail_chunks = (T_padded // CHUNK) - num_truncations * num_chunks
+        for i in range(tail_chunks):
+            kv_chunk = chunk_inputs[num_truncations * num_chunks + i]  # [B, chunk, C]
+            out_chunk, current_zp, current_sc, zp_seq, sc_seq = _adkv_chunk_forward(
+                    kv_chunk, current_zp, current_sc,
+                    alpha, beta, target,
+                    self.upper_limit, self.lower_limit,
+                    self.sc_min, self.sc_max, output_states)
+            chunk_outputs.append(out_chunk)
+
+            if output_states:
+                    chunk_zp_seq.append(zp_seq)
+                    chunk_sc_seq.append(sc_seq)
+
         outputs = torch.cat(chunk_outputs, dim=1)  # [B, T_padded, C]
 
         if output_states:

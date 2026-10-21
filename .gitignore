@@ -224,3 +224,6 @@ figures/
 
 # Calibration dataset
 calib/
+
+# Aim
+.aim/
