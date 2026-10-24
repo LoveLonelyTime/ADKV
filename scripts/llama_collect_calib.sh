@@ -3,7 +3,7 @@ set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
 
-python -m adkv.calib_collector \
+python -m adkv.train.calib_collector \
     --layer=0-31 \
     --clip_len=16000 \
     --shuffle \

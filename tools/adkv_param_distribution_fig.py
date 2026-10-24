@@ -10,7 +10,7 @@ import matplotlib.gridspec as gridspec
 from matplotlib.colors import TwoSlopeNorm, Normalize
 from scipy.stats import gaussian_kde
 
-from adkv.train_model import ADKVTrainModel
+from adkv.train.train_model import ADKVTrainModel
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

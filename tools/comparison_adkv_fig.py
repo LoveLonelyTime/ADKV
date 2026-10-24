@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 
-from adkv.train_model import ADKVTrainModel
+from adkv.train.train_model import ADKVTrainModel
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ def load_layer_data(
     logger.info(
         f"[layer {layer}] Calibrating (this may take a few minutes)...")
     cmd = [
-        sys.executable, "-m", "adkv.calib_collector",
+        sys.executable, "-m", "adkv.train.calib_collector",
         f"--layers={layer}",
         f"--shuffle",
         f"--clip_len={clip_len}",

@@ -18,7 +18,7 @@ def llama_calib_attention(query_states: torch.Tensor,
                           value_states: torch.Tensor,
                           attention_mask: torch.Tensor = None,
                           head_dim: int = 128):
-    # query_states: [B, T, C_q] (also accepts [T, C_q] — auto-unsqueezed below)
+    # query_states: [B, T, C_q] (also accepts [T, C_q] - auto-unsqueezed below)
     # key_states: [B, T, C_kv]
     # value_states: [B, T, C_kv]
 

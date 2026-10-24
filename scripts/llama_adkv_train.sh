@@ -3,7 +3,7 @@ set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
 
-python -m adkv.adkv_train_ray \
+python -m adkv.train.adkv_train_ray \
     --atten=llama \
     --num_hidden_states=4096 \
     --layers=0-31 \
