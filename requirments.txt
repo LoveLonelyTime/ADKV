@@ -1,3 +1,9 @@
 transformers==5.3.0
 datasets==5.1.0
 ray==2.59.0
+lm-eval==0.4.13
+accelerate==1.15.0
+toml==0.10.2
+jieba==0.42.1
+fuzzywuzzy==0.18.0
+rouge==1.0.1
