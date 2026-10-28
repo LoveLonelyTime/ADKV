@@ -79,67 +79,45 @@ def ADKV_memory(batch, hidden_dim, seq_len, bits=4):
 
 def KVQuant_memory(batch, hidden_dim, seq_len, bits=4, outlier_ratio=0.01):
     """
-    KVQuant (arxiv 2401.18079) memory breakdown.
+    KVQuant (arxiv 2401.18079) memory breakdown, per layer.
 
-    Quantization strategy:
-      Keys   -> per-channel quantization  (one scale per channel, across ALL tokens)
-      Values -> per-token   quantization  (one scale per token,   across ALL channels)
+    Layout follows the deployed cache (QuantK / QuantV in
+    deployment/.../models/llama/modeling_llama.py):
+      1. 4-bit packed K and V, per request.
+      2. Key per-channel LUT, shape (hidden_dim, 2^bits), FP32, plus zero point
+         and upper/lower outlier thresholds (3 x FP32 per channel). These are
+         calibration artefacts, so they are model-static and shared across batch.
+      3. Value per-token LUT, shape (seq_len, 2^bits), FP32 per request; scale
+         and zero point are baked into this table, there are no separate tensors.
+      4. Dense-and-sparse outliers: 2 * (int(outlier_ratio / 2 * hidden_dim) + 1)
+         entries per token, FP32 value + INT32 index. The deployed cache uses the
+         capped layout, so it stores no CSR pointer arrays. Values share the same
+         per-token count (value topk keeps one extra slot per side for the
+         min/max thresholds, which are not stored).
 
-    Metadata (verified against KVQuant/benchmarking/scripts/test_kernels_{key,value}.py):
-      1. Key scale + zero_point    : per-channel -> O(hidden_dim), NOT O(seq_len x hidden_dim)
-                                     FP32 tensors, shape (hidden_dim,) each
-      2. Value scale + zero_point  : per-token -> O(seq_len), NOT O(seq_len x hidden_dim)
-                                     FP32 tensors, shape (seq_len,) each
-      3. Key NUQ lookup table      : per-channel non-uniform quantization codebook
-                                     shape (hidden_dim, 2^bits), FP32
-                                     -> O(hidden_dim x 2^bits), independent of seq_len
-      4. Value NUQ lookup table    : single shared NF4 signpost table
-                                     shape (2^bits,), FP32 - negligible but included
-      5. Key sparse outliers       : dense-sparse: outlier_ratio x seq_len tokens per channel
-                                     stored as FP32 value + INT32 column-index per entry,
-                                     plus INT32 start_rows pointer array of size O(seq_len)
-      6. Value sparse outliers     : outlier_ratio x hidden_dim channels per token,
-                                     stored as FP32 value + INT32 row-index per entry,
-                                     plus INT32 start_cols pointer array of size O(hidden_dim)
+    Supports MHA: hidden_dim = num_heads * head_dim. The deployed cache does not
+    have a batched implementation, so batch > 1 is an extrapolation (per-request tensors are
+    replicated, calibration-derived ones are not).
     """
     # Quantized KV data
     key_quant_bytes = batch * hidden_dim * seq_len * bits / 8
     val_quant_bytes = batch * hidden_dim * seq_len * bits / 8
 
-    # Scale + zero point metadata
-    # Keys: per-channel -> one (scale, zero point) pair per (batch, channel), FP32
-    key_scale_bytes = hidden_dim * 2 * 4  # 2 x FP32 per channel
+    # Per-channel key metadata (calibration-derived, batch-independent)
+    key_lut_bytes = hidden_dim * (2 ** bits) * 4   # FP32 per LUT entry
+    key_threshold_bytes = hidden_dim * 3 * 4       # zero point + upper/lower threshold
 
-    # Values: per-token -> one (scale, zero point) pair per (batch, token), FP32
-    val_scale_bytes = batch * seq_len * hidden_dim / 128 * 2 * 4  # 2 x FP32 per token
+    # Per-token value LUT (scale and zero point baked in)
+    val_lut_bytes = batch * seq_len * (2 ** bits) * 4
 
-    # Non-uniform quantization (NUQ) lookup tables
-    # Keys: per-channel LUT; shape (hidden_dim, 2^bits), FP32
-    #   (from: lookup_table = torch.zeros((num_heads, head_dim, 2**4)), test_kernels_key.py)
-    key_lut_bytes = hidden_dim * (2 ** bits) * 4   # FP32 per entry
-
-    # Values: single shared NF4 signpost table; shape (2^bits,), FP32
-    #   (from: lookup_table = torch.tensor(nf4_signposts).float(), test_kernels_value.py)
-    # negligible; one shared table regardless of batch
-    val_lut_bytes = (2 ** bits) * 4
-
-    # Sparse outlier metadata (dense-sparse quantization)
-    # Actual code uses FP32 vals and INT32 indices (torch default dtypes):
-    #   rows2/cols2 = int32 (4 B each), vals2 = float32 (4 B)
-    # Key COO: (col_inde x INT32 + val FP32) per nnz, plus start_rows INT32 array O(seq_len)
-    key_nnz = batch * hidden_dim * seq_len * outlier_ratio
-    # nnz x (idx + val) + start_rows
-    key_outlier_bytes = key_nnz * (4 + 4) + batch * seq_len * 4
-
-    # Value COO: (row_index INT32 + val FP32) per nnz, plus start_cols INT32 array O(hidden_dim)
-    val_nnz = batch * hidden_dim * seq_len * outlier_ratio
-    # nnz x (idx + val) + start_cols
-    val_outlier_bytes = val_nnz * (4 + 4) + batch * hidden_dim * 4
+    # Dense-and-sparse outliers for both K and V
+    num_outliers_per_token = 2 * (int(outlier_ratio / 2 * hidden_dim) + 1)
+    outlier_bytes = 2 * batch * seq_len * \
+        num_outliers_per_token * (4 + 4)  # FP32 value + INT32 index
 
     quant_bytes = key_quant_bytes + val_quant_bytes
-    meta_bytes = (key_scale_bytes + val_scale_bytes
-                  + key_lut_bytes + val_lut_bytes
-                  + key_outlier_bytes + val_outlier_bytes)
+    meta_bytes = (key_lut_bytes + key_threshold_bytes
+                  + val_lut_bytes + outlier_bytes)
     return quant_bytes, meta_bytes
 
 
